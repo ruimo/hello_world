@@ -1,8 +1,8 @@
 name: Build
 on: [push]
 env:
-  # The project name specified in your Cargo.toml
-  PROJECT_NAME: Hello world
+  # The project name specified in your Cargo.toml. Should not contain white spaces.
+  PROJECT_NAME: hello_world
 jobs:
   build:
     # Set the job to run on the platform specified by the matrix below
