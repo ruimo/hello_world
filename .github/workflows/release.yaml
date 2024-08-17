@@ -73,7 +73,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${BIN_RELEASE}
           asset_path: ./bin/${BIN_RELEASE}
           asset_name: ${BIN_RELEASE}
           asset_content_type: application/octet-stream
