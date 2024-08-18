@@ -14,6 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
+          # Platform list: https://github.com/cross-rs/cross
           # Platforms that don't work:
           #
           # - sparc64-unknown-linux-gnu - cannot compile openssl-sys
