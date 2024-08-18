@@ -1,47 +1,176 @@
-name: Build
-on:
-  push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
+name: Tests and release
+on: [push, pull_request]
 env:
-  # The project name specified in your Cargo.toml. Should not contain white spaces.
-  PROJECT_NAME: hello_world
+  CRATE_NAME: hello_world
+  GITHUB_TOKEN: ${{ github.token }}
+  RUST_BACKTRACE: 1
 jobs:
-  build:
-    # Set the job to run on the platform specified by the matrix below
-    runs-on: ${{ matrix.runner }}
- 
-    # Define the build matrix for cross-compilation
+  test:
+    name: ${{ matrix.platform.os_name }} with rust ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.platform.os }}
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - name: linux-amd64
-            runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - name: win-amd64
-            runner: windows-latest
+        platform:
+          # Platforms that don't work:
+          #
+          # - sparc64-unknown-linux-gnu - cannot compile openssl-sys
+          # - x86_64-unknown-illumos - weird error compiling openssl - "bin/sh: 1: granlib: not found"
+
+#          - os_name: FreeBSD-x86_64
+#            os: ubuntu-20.04
+#            target: x86_64-unknown-freebsd
+#            bin: hello_world
+#            name: hello_world-FreeBSD-x86_64.tar.gz
+#            skip_tests: true
+          - os_name: Linux-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            bin: hello_word
+            name: hello_world-Linux-x86_64-musl.tar.gz
+#          - os_name: Linux-aarch64
+#            os: ubuntu-20.04
+#            target: aarch64-unknown-linux-musl
+#            bin: hello_world
+#            name: hello_world-Linux-aarch64-musl.tar.gz
+#          - os_name: Linux-arm
+#            os: ubuntu-20.04
+#            target: arm-unknown-linux-musleabi
+#            bin: hello_world
+#            name: hello_world-Linux-arm-musl.tar.gz
+#          - os_name: Linux-i686
+#            os: ubuntu-20.04
+#            target: i686-unknown-linux-musl
+#            bin: hello_world
+#            name: hello_world-Linux-i686-musl.tar.gz
+#            skip_tests: true
+#          - os_name: Linux-powerpc
+#            os: ubuntu-20.04
+#            target: powerpc-unknown-linux-gnu
+#            bin: hello_world
+#            name: hello_world-Linux-powerpc-gnu.tar.gz
+#            skip_tests: true
+#          - os_name: Linux-powerpc64
+#            os: ubuntu-20.04
+#            target: powerpc64-unknown-linux-gnu
+#            bin: hello_world
+#            name: hello_world-Linux-powerpc64-gnu.tar.gz
+#            skip_tests: true
+#          - os_name: Linux-powerpc64le
+#            os: ubuntu-20.04
+#            target: powerpc64le-unknown-linux-gnu
+#            bin: hello_world
+#            name: hello_world-Linux-powerpc64le.tar.gz
+#            skip_tests: true
+#          - os_name: Linux-riscv64
+#            os: ubuntu-20.04
+#            target: riscv64gc-unknown-linux-gnu
+#            bin: hello_world
+#            name: hello_world-Linux-riscv64gc-gnu.tar.gz
+#          - os_name: Linux-s390x
+#            os: ubuntu-20.04
+#            target: s390x-unknown-linux-gnu
+#            bin: hello_world
+#            name: hello_world-Linux-s390x-gnu.tar.gz
+#            skip_tests: true
+#          - os_name: NetBSD-x86_64
+#            os: ubuntu-20.04
+#            target: x86_64-unknown-netbsd
+#            bin: hello_world
+#            name: hello_world-NetBSD-x86_64.tar.gz
+#            skip_tests: true
+#          - os_name: Windows-aarch64
+#            os: windows-latest
+#            target: aarch64-pc-windows-msvc
+#            bin: hello_world.exe
+#            name: hello_world-Windows-aarch64.zip
+#            skip_tests: true
+#          - os_name: Windows-i686
+#            os: windows-latest
+#            target: i686-pc-windows-msvc
+#            bin: hello_world.exe
+#            name: hello_world-Windows-i686.zip
+#            skip_tests: true
+          - os_name: Windows-x86_64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
-          - name: macos-amd64
-            runner: macos-latest
+            bin: hello_world.exe
+            name: hello_world-Windows-x86_64.zip
+          - os_name: macOS-x86_64
+            os: macOS-latest
             target: x86_64-apple-darwin
-          - name: macos-arm64
-            runner: macos-latest
+            bin: hello_world
+            name: hello_world-Darwin-x86_64.tar.gz
+          - os_name: macOS-aarch64
+            os: macOS-latest
             target: aarch64-apple-darwin
- 
-    # The steps to run for each matrix item
+            bin: hello_world
+            name: hello_world-Darwin-aarch64.tar.gz
+            skip_tests: true
+        toolchain:
+          - stable
+          - beta
+          - nightly
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
- 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: "${{ matrix.target }}"
- 
-      - name: Setup Cache
+      - uses: actions/checkout@v4
+      - name: Cache cargo & target directories
         uses: Swatinem/rust-cache@v2
- 
-      - name: Build Binary
-        run: cargo build --verbose --locked --release --target ${{ matrix.target }}
+        with:
+          key: "v2"
+      - name: Configure Git
+        run: |
+          git config --global user.email "jdoe@example.com"
+          git config --global user.name "J. Doe"
+      - name: Install musl-tools on Linux
+        run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
+        if: contains(matrix.platform.name, 'musl')
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: "build"
+          target: ${{ matrix.platform.target }}
+          toolchain: ${{ matrix.toolchain }}
+          args: "--locked --release"
+          strip: true
+      - name: Run tests
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: "test"
+          target: ${{ matrix.platform.target }}
+          toolchain: ${{ matrix.toolchain }}
+          args: "--locked --release"
+        if: ${{ !matrix.platform.skip_tests }}
+      - name: Package as archive
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          else
+            tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          fi
+          cd -
+        if: |
+          matrix.toolchain == 'stable' &&
+          ( startsWith( github.ref, 'refs/tags/v' ) ||
+            github.ref == 'refs/tags/test-release' )
+      - name: Publish release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: hello_world-${{ matrix.platform.os_name }}
+          path: "hello_world-*"
+        if: matrix.toolchain == 'stable' && github.ref == 'refs/tags/test-release'
+      - name: Generate SHA-256
+        run: shasum -a 256 ${{ matrix.platform.name }}
+        if: |
+          matrix.toolchain == 'stable' &&
+          matrix.platform.os == 'macOS-latest' &&
+          ( startsWith( github.ref, 'refs/tags/v' ) ||
+            github.ref == 'refs/tags/test-release' )
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: "hello_world*"
+          body_path: Changes.md
+        if: matrix.toolchain == 'stable' && startsWith( github.ref, 'refs/tags/v' )
